@@ -21,19 +21,7 @@ export default function UploadZone({ onUploadComplete }) {
       return true
     }
 
-    try {
-      const { hostname } = new URL(uploadUrl)
-      const isLocalFrontend =
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1'
-
-      return (
-        isLocalFrontend &&
-        hostname.endsWith('.r2.cloudflarestorage.com')
-      )
-    } catch {
-      return false
-    }
+    return false
   }
 
   const logDirectUploadFailure = (err, uploadUrl) => {
