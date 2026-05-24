@@ -25,6 +25,8 @@ Files never pass through the service. The backend generates a presigned URL; the
 
 The service stores only metadata in PostgreSQL: tenant, object key, content type, size, upload status, and aggregate metrics. That keeps the API small, reduces backend bandwidth costs, and makes provider switching straightforward.
 
+Local configuration is loaded automatically from `.env` at application startup, so you do not need to keep exporting variables from `~/.zshrc` for local development.
+
 ## How to switch providers
 
 Current built-in providers:
@@ -87,47 +89,56 @@ CREATE DATABASE file_storage;
 Copy `.env.example` to `.env` and fill in real values:
 
 ```env
-DATABASE_URL=jdbc:postgresql://localhost:5432/file_storage
+DATABASE_URL=jdbc:postgresql://127.0.0.1:5432/file_storage
 DATABASE_USERNAME=postgres
 DATABASE_PASSWORD=postgres
-DATABASE_SCHEMA=public
+DATABASE_SCHEMA=file_storage
 
 STORAGE_PROVIDER=cloudflare-r2
 STORAGE_BUCKET_NAME=your-bucket
 STORAGE_ACCOUNT_ID=your-r2-account-id
 STORAGE_ACCESS_KEY=your-access-key
 STORAGE_SECRET_KEY=your-secret-key
-
-# Only needed for aws-s3
 STORAGE_REGION=us-east-1
 ```
+
+Recommended local setup:
+
+- Use `127.0.0.1` instead of `localhost` to avoid IPv4/IPv6 resolution issues on some machines.
+- Use `DATABASE_SCHEMA=file_storage` if you want this app’s tables isolated from other tables in the same database.
+- Keep `DATABASE_SCHEMA=public` only if you want Flyway and JPA to use the default schema.
 
 If you are using Supabase, set `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` from the connection details in your Supabase dashboard. Supabase recommends direct connections for persistent backends when IPv6 is available, and the session pooler when IPv4 compatibility is needed.
 
 If you are using a schema inside an existing database, point `DATABASE_URL` at the database and set `DATABASE_SCHEMA` to that schema name. Example:
 
 ```env
-DATABASE_URL=jdbc:postgresql://localhost:5432/postgres
+DATABASE_URL=jdbc:postgresql://127.0.0.1:5432/postgres
 DATABASE_SCHEMA=file_storage
 ```
 
-### 4. Load env vars into your shell
-
-Spring Boot reads environment variables from the process environment, so export them before starting the app.
-
-```bash
-set -a
-source .env
-set +a
-```
-
-### 5. Start the service
+### 4. Start the service
 
 ```bash
 mvn spring-boot:run
 ```
 
-Flyway will create the tables automatically on startup.
+The app auto-loads `.env` on startup. Flyway will create the schema history table and application tables automatically.
+
+### 5. Verify the app started
+
+```bash
+curl http://localhost:8080/api/health
+```
+
+Expected response:
+
+```json
+{
+  "status": "ok",
+  "service": "file-storage-service"
+}
+```
 
 ### 6. Seed a tenant for local testing
 
@@ -138,7 +149,16 @@ INSERT INTO tenants (name, api_key)
 VALUES ('demo-tenant', 'dev-api-key');
 ```
 
-### 7. Set helper shell variables for API testing
+### 7. Confirm Flyway created the tables
+
+In your selected schema, you should now see:
+
+- `flyway_schema_history`
+- `tenants`
+- `files`
+- `tenant_metrics`
+
+### 8. Set helper shell variables for API testing
 
 ```bash
 export API_URL=http://localhost:8080
@@ -152,13 +172,13 @@ export API_KEY=dev-api-key
 | `DATABASE_URL` | Yes | PostgreSQL JDBC URL |
 | `DATABASE_USERNAME` | Yes | PostgreSQL username |
 | `DATABASE_PASSWORD` | Yes | PostgreSQL password |
-| `DATABASE_SCHEMA` | Optional | Database schema, defaults to `public` |
+| `DATABASE_SCHEMA` | Optional | Database schema used by Flyway, Hibernate, and Hikari; defaults to `public` |
 | `STORAGE_PROVIDER` | Yes | `cloudflare-r2` or `aws-s3` |
 | `STORAGE_BUCKET_NAME` | Yes | Bucket name |
 | `STORAGE_ACCOUNT_ID` | R2 only | Cloudflare account ID |
 | `STORAGE_ACCESS_KEY` | Yes | Storage access key |
 | `STORAGE_SECRET_KEY` | Yes | Storage secret key |
-| `STORAGE_REGION` | AWS only | AWS region, defaults to `us-east-1` |
+| `STORAGE_REGION` | Optional for AWS | AWS region, defaults to `us-east-1` |
 
 ## API endpoints
 
@@ -302,6 +322,8 @@ Recommended setup:
 - In Supabase, copy the connection details from `Connect`.
 - In Render, create a Docker-based web service from this repository.
 - Add the same environment variables listed in `.env.example`.
+- Set `DATABASE_SCHEMA` explicitly if you do not want to use `public`.
+- Use `STORAGE_REGION` only when `STORAGE_PROVIDER=aws-s3`.
 - Keep the health check path set to `/api/health`.
 
 Reference docs:

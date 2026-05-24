@@ -11,6 +11,8 @@ services:
         sync: false
       - key: DATABASE_PASSWORD
         sync: false
+      - key: DATABASE_SCHEMA
+        value: public
       - key: STORAGE_PROVIDER
         value: cloudflare-r2
       - key: STORAGE_BUCKET_NAME
