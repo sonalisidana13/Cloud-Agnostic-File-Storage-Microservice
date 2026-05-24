@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { getMetrics } from '../api/files'
+import { createDemoTenant } from '../api/tenants'
 
 export default function Header({
   connected,
@@ -10,12 +11,21 @@ export default function Header({
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [creatingTenant, setCreatingTenant] = useState(false)
   const [error, setError] = useState('')
 
-  const handleConnect = async () => {
-    setLoading(true)
+  const connectWithApiKey = async (nextApiKey) => {
+    const normalizedApiKey = nextApiKey.trim()
+
+    if (!normalizedApiKey) {
+      setError('Enter an API key')
+      return
+    }
+
     setError('')
-    localStorage.setItem('apiKey', apiKey)
+    setLoading(true)
+    setApiKey(normalizedApiKey)
+    localStorage.setItem('apiKey', normalizedApiKey)
 
     try {
       const res = await getMetrics()
@@ -29,6 +39,26 @@ export default function Header({
       localStorage.removeItem('apiKey')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleConnect = async () => {
+    await connectWithApiKey(apiKey)
+  }
+
+  const handleCreateTenant = async () => {
+    setCreatingTenant(true)
+    setError('')
+
+    try {
+      const res = await createDemoTenant()
+      const nextApiKey = res.data.apiKey
+      setShowKey(true)
+      await connectWithApiKey(nextApiKey)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not create demo tenant')
+    } finally {
+      setCreatingTenant(false)
     }
   }
 
@@ -75,12 +105,22 @@ export default function Header({
               </button>
               <button
                 onClick={handleConnect}
-                disabled={loading}
+                disabled={loading || creatingTenant}
                 className="ml-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
               >
                 {loading ? 'Connecting...' : 'Connect'}
               </button>
+              <button
+                onClick={handleCreateTenant}
+                disabled={loading || creatingTenant}
+                className="ml-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+              >
+                {creatingTenant ? 'Creating...' : 'Create Demo Tenant'}
+              </button>
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Demo tenant creation generates and saves an API key locally
+            </p>
             {error ? <p className="mt-1 text-sm text-red-400">{error}</p> : null}
           </div>
         )}

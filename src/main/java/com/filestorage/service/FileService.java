@@ -5,6 +5,7 @@ import com.filestorage.dto.InitiateUploadRequest;
 import com.filestorage.dto.InitiateUploadResponse;
 import com.filestorage.exception.FileNotFoundException;
 import com.filestorage.exception.StorageException;
+import com.filestorage.exception.UploadSizeExceededException;
 import com.filestorage.model.StoredFile;
 import com.filestorage.model.Tenant;
 import com.filestorage.provider.StorageProvider;
@@ -24,6 +25,7 @@ public class FileService {
 
     private static final long UPLOAD_URL_EXPIRY_SECONDS = 900;
     private static final long DOWNLOAD_URL_EXPIRY_SECONDS = 3600;
+    private static final long MAX_UPLOAD_SIZE_BYTES = 2L * 1024 * 1024;
     private static final String PENDING_STATUS = "PENDING";
     private static final String UPLOADED_STATUS = "UPLOADED";
     private static final String DELETED_STATUS = "DELETED";
@@ -44,6 +46,8 @@ public class FileService {
 
     @Transactional
     public InitiateUploadResponse initiateUpload(Tenant tenant, InitiateUploadRequest request) {
+        validateUploadSize(request.sizeBytes());
+
         UUID fileId = UUID.randomUUID();
         String fileKey = tenant.getId() + "/" + fileId + "/" + request.fileName();
 
@@ -88,6 +92,8 @@ public class FileService {
 
     @Transactional
     public void uploadPendingFile(Tenant tenant, UUID fileId, MultipartFile file) {
+        validateUploadSize(file.getSize());
+
         StoredFile storedFile = storedFileRepository.findByIdAndTenantId(fileId, tenant.getId())
                 .orElseThrow(() -> new FileNotFoundException("File not found"));
 
@@ -159,6 +165,12 @@ public class FileService {
 
     private long defaultToZero(Long value) {
         return value == null ? 0L : value;
+    }
+
+    private void validateUploadSize(long sizeBytes) {
+        if (sizeBytes > MAX_UPLOAD_SIZE_BYTES) {
+            throw new UploadSizeExceededException("Files larger than 2 MB cannot be uploaded");
+        }
     }
 
     private FileMetadataResponse toFileMetadataResponse(StoredFile storedFile) {

@@ -7,6 +7,8 @@ import {
 } from '../api/files'
 import { useToast } from '../context/ToastContext'
 
+const MAX_UPLOAD_SIZE_BYTES = 2 * 1024 * 1024
+
 export default function UploadZone({ onUploadComplete }) {
   const inputRef = useRef(null)
   const { addToast } = useToast()
@@ -41,12 +43,27 @@ export default function UploadZone({ onUploadComplete }) {
     })
   }
 
+  const getUploadErrorMessage = (err, fileName) =>
+    err.response?.data?.error || `Failed to upload ${fileName}`
+
   const handleFiles = async (fileList) => {
     const files = Array.from(fileList)
-    const ids = files.map((_, i) => Date.now() + i)
+    const validFiles = files.filter((file) => {
+      if (file.size <= MAX_UPLOAD_SIZE_BYTES) {
+        return true
+      }
+
+      addToast(`${file.name} is larger than 2 MB and was skipped`, 'error')
+      return false
+    })
+
+    if (validFiles.length === 0) {
+      return
+    }
+    const ids = validFiles.map((_, i) => Date.now() + i)
 
     setUploads(
-      files.map((f, i) => ({
+      validFiles.map((f, i) => ({
         id: ids[i],
         fileName: f.name,
         progress: 0,
@@ -54,8 +71,8 @@ export default function UploadZone({ onUploadComplete }) {
       })),
     )
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i]
       const uploadId = ids[i]
 
       try {
@@ -114,7 +131,7 @@ export default function UploadZone({ onUploadComplete }) {
         setUploads((prev) =>
           prev.map((u) => (u.id === uploadId ? { ...u, status: 'error' } : u)),
         )
-        addToast(`Failed to upload ${file.name}`, 'error')
+        addToast(getUploadErrorMessage(err, file.name), 'error')
       }
     }
 
@@ -159,7 +176,9 @@ export default function UploadZone({ onUploadComplete }) {
           {isDragging ? '↑' : '📁'}
         </div>
         <p className="text-gray-400">Drop files here or click to browse</p>
-        <p className="mt-1 text-sm text-gray-600">Any file type supported</p>
+        <p className="mt-1 text-sm text-gray-600">
+          Any file type supported, max 2 MB per file
+        </p>
       </div>
 
       {uploads.length > 0 ? (
