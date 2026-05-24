@@ -4,7 +4,7 @@ import java.io.InputStream;
 
 public interface StorageProvider {
 
-    String generatePresignedUploadUrl(String fileKey, long expiresInSeconds);
+    String generatePresignedUploadUrl(String fileKey, String contentType, long expiresInSeconds);
 
     String generatePresignedDownloadUrl(String fileKey, long expiresInSeconds);
 

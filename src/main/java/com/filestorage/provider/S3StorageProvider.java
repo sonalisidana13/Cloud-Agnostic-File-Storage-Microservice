@@ -54,10 +54,11 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     @Override
-    public String generatePresignedUploadUrl(String fileKey, long expiresInSeconds) {
+    public String generatePresignedUploadUrl(String fileKey, String contentType, long expiresInSeconds) {
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
                 .key(fileKey)
+                .contentType(contentType)
                 .build();
 
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()

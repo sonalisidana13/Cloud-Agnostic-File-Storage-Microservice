@@ -8,6 +8,18 @@ import {
 import { useToast } from '../context/ToastContext'
 
 const MAX_UPLOAD_SIZE_BYTES = 2 * 1024 * 1024
+const SUPPORTED_FILE_TYPES_MESSAGE =
+  'Only PDF, TXT, CSV, JSON, PNG, and JPG files are allowed'
+const SUPPORTED_MIME_TYPES_BY_EXTENSION = {
+  pdf: ['application/pdf'],
+  txt: ['text/plain'],
+  csv: ['text/csv', 'application/csv', 'application/vnd.ms-excel'],
+  json: ['application/json', 'text/json'],
+  png: ['image/png'],
+  jpg: ['image/jpeg'],
+  jpeg: ['image/jpeg'],
+}
+const ACCEPTED_FILE_TYPES = '.pdf,.txt,.csv,.json,.png,.jpg,.jpeg'
 
 export default function UploadZone({ onUploadComplete }) {
   const inputRef = useRef(null)
@@ -46,11 +58,50 @@ export default function UploadZone({ onUploadComplete }) {
   const getUploadErrorMessage = (err, fileName) =>
     err.response?.data?.error || `Failed to upload ${fileName}`
 
+  const getFileExtension = (fileName) => {
+    const lastDotIndex = fileName.lastIndexOf('.')
+
+    if (lastDotIndex < 0 || lastDotIndex === fileName.length - 1) {
+      return null
+    }
+
+    return fileName.slice(lastDotIndex + 1).toLowerCase()
+  }
+
+  const resolveContentType = (file) => {
+    const extension = getFileExtension(file.name)
+    const allowedMimeTypes = extension
+      ? SUPPORTED_MIME_TYPES_BY_EXTENSION[extension]
+      : null
+
+    if (!allowedMimeTypes) {
+      return null
+    }
+
+    const normalizedType = file.type?.split(';')[0]?.trim().toLowerCase()
+    if (normalizedType && allowedMimeTypes.includes(normalizedType)) {
+      return normalizedType
+    }
+
+    if (normalizedType) {
+      return null
+    }
+
+    return allowedMimeTypes[0]
+  }
+
   const handleFiles = async (fileList) => {
     const files = Array.from(fileList)
     const validFiles = files.filter((file) => {
       if (file.size <= MAX_UPLOAD_SIZE_BYTES) {
-        return true
+        const resolvedContentType = resolveContentType(file)
+
+        if (resolvedContentType) {
+          return true
+        }
+
+        addToast(`${file.name} is not an allowed file type`, 'error')
+        return false
       }
 
       addToast(`${file.name} is larger than 2 MB and was skipped`, 'error')
@@ -74,11 +125,12 @@ export default function UploadZone({ onUploadComplete }) {
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i]
       const uploadId = ids[i]
+      const resolvedContentType = resolveContentType(file)
 
       try {
         const initiateRes = await initiateUpload(
           file.name,
-          file.type || 'application/octet-stream',
+          resolvedContentType,
           file.size,
         )
         const { fileId, uploadUrl } = initiateRes.data
@@ -86,7 +138,7 @@ export default function UploadZone({ onUploadComplete }) {
 
         if (!usedBackendFallback) {
           try {
-            await uploadToStorage(uploadUrl, file, (pct) => {
+            await uploadToStorage(uploadUrl, file, resolvedContentType, (pct) => {
               setUploads((prev) =>
                 prev.map((u) =>
                   u.id === uploadId ? { ...u, progress: pct } : u,
@@ -167,7 +219,7 @@ export default function UploadZone({ onUploadComplete }) {
         <input
           ref={inputRef}
           type="file"
-          accept="*/*"
+          accept={ACCEPTED_FILE_TYPES}
           multiple
           onChange={handleInputChange}
           className="hidden"
@@ -177,7 +229,7 @@ export default function UploadZone({ onUploadComplete }) {
         </div>
         <p className="text-gray-400">Drop files here or click to browse</p>
         <p className="mt-1 text-sm text-gray-600">
-          Any file type supported, max 2 MB per file
+          {SUPPORTED_FILE_TYPES_MESSAGE}, max 2 MB per file
         </p>
       </div>
 

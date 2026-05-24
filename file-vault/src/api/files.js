@@ -4,9 +4,9 @@ import client from './client'
 export const initiateUpload = (fileName, contentType, sizeBytes) =>
   client.post('/api/files/initiate', { fileName, contentType, sizeBytes })
 
-export const uploadToStorage = (uploadUrl, file, onProgress) =>
+export const uploadToStorage = (uploadUrl, file, contentType, onProgress) =>
   axios.put(uploadUrl, file, {
-    headers: { 'Content-Type': file.type },
+    headers: { 'Content-Type': contentType },
     onUploadProgress: (e) => onProgress(Math.round((e.loaded * 100) / e.total)),
   })
 

@@ -32,6 +32,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", exception.getMessage()));
     }
 
+    @ExceptionHandler(UnsupportedFileTypeException.class)
+    public ResponseEntity<Map<String, String>> handleUnsupportedFileType(UnsupportedFileTypeException exception) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(Map.of("error", exception.getMessage()));
+    }
+
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, String>> handleMultipartUploadSizeExceeded(MaxUploadSizeExceededException exception) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
