@@ -1,5 +1,6 @@
 package com.filestorage.service;
 
+import com.filestorage.dto.FileMetadataResponse;
 import com.filestorage.dto.InitiateUploadRequest;
 import com.filestorage.dto.InitiateUploadResponse;
 import com.filestorage.exception.FileNotFoundException;
@@ -11,6 +12,7 @@ import com.filestorage.repository.StoredFileRepository;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class FileService {
 
     private static final long UPLOAD_URL_EXPIRY_SECONDS = 900;
+    private static final long DOWNLOAD_URL_EXPIRY_SECONDS = 3600;
     private static final String PENDING_STATUS = "PENDING";
     private static final String UPLOADED_STATUS = "UPLOADED";
+    private static final String DELETED_STATUS = "DELETED";
 
     private final StoredFileRepository storedFileRepository;
     private final StorageProvider storageProvider;
@@ -67,5 +71,52 @@ public class FileService {
         storedFile.setStatus(UPLOADED_STATUS);
         storedFile.setUploadedAt(LocalDateTime.now(ZoneOffset.UTC));
         storedFileRepository.save(storedFile);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FileMetadataResponse> listFiles(Tenant tenant) {
+        return storedFileRepository.findByTenantIdAndStatus(tenant.getId(), UPLOADED_STATUS).stream()
+                .map(this::toFileMetadataResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public String getDownloadUrl(Tenant tenant, UUID fileId) {
+        StoredFile storedFile = storedFileRepository.findByIdAndTenantId(fileId, tenant.getId())
+                .orElseThrow(() -> new FileNotFoundException("File not found"));
+
+        // R2 charges $0 egress — presigned URLs served directly from R2 edge
+        return storageProvider.generatePresignedDownloadUrl(storedFile.getFileKey(), DOWNLOAD_URL_EXPIRY_SECONDS);
+    }
+
+    @Transactional
+    public void deleteFile(Tenant tenant, UUID fileId) {
+        StoredFile storedFile = storedFileRepository.findByIdAndTenantId(fileId, tenant.getId())
+                .orElseThrow(() -> new FileNotFoundException("File not found"));
+
+        storageProvider.delete(storedFile.getFileKey());
+        storedFile.setStatus(DELETED_STATUS);
+        storedFileRepository.save(storedFile);
+    }
+
+    private FileMetadataResponse toFileMetadataResponse(StoredFile storedFile) {
+        // R2 charges $0 egress — presigned URLs served directly from R2 edge
+        String downloadUrl = storageProvider.generatePresignedDownloadUrl(
+                storedFile.getFileKey(),
+                DOWNLOAD_URL_EXPIRY_SECONDS
+        );
+
+        Instant uploadedAt = storedFile.getUploadedAt() == null
+                ? null
+                : storedFile.getUploadedAt().toInstant(ZoneOffset.UTC);
+
+        return new FileMetadataResponse(
+                storedFile.getId(),
+                storedFile.getOriginalName(),
+                storedFile.getContentType(),
+                storedFile.getSizeBytes(),
+                uploadedAt,
+                downloadUrl
+        );
     }
 }
