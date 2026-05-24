@@ -1,6 +1,6 @@
 # Cloud-Agnostic File Storage Microservice
 
-A Spring Boot microservice for direct-to-object-storage uploads, tenant-scoped file metadata, and storage-provider switching with zero code changes.
+A Spring Boot microservice for direct-to-object-storage uploads, tenant-scoped file metadata, storage-provider switching with zero code changes, and a lightweight demo tenant flow for frontend testing.
 
 ## Why cloud-agnostic?
 
@@ -21,11 +21,23 @@ Note: These are simplified headline numbers for quick comparison. Exact pricing 
 
 ## Architecture
 
-Files never pass through the service. The backend generates a presigned URL; the client uploads directly to R2.
+Files usually do not pass through the service. The backend generates a presigned URL; the client uploads directly to object storage. A backend multipart fallback endpoint is also available for demo and recovery scenarios when direct browser-to-storage upload fails.
 
 The service stores only metadata in PostgreSQL: tenant, object key, content type, size, upload status, and aggregate metrics. That keeps the API small, reduces backend bandwidth costs, and makes provider switching straightforward.
 
 Local configuration is loaded automatically from `.env` at application startup, so you do not need to keep exporting variables from `~/.zshrc` for local development.
+
+Current tenant and upload behavior:
+
+- Every protected API request uses `X-API-Key`
+- A public demo endpoint can create a tenant and return an API key for frontend demos
+- The React frontend stores the API key locally and sends it on API requests
+- Uploads prefer direct browser-to-storage transfer and fall back to backend multipart upload if needed
+
+Current upload guardrails:
+
+- Max file size: `2 MB` per file
+- Allowed file types: `pdf`, `txt`, `csv`, `json`, `png`, `jpg`, `jpeg`
 
 ## How to switch providers
 
@@ -100,6 +112,13 @@ STORAGE_ACCOUNT_ID=your-r2-account-id
 STORAGE_ACCESS_KEY=your-access-key
 STORAGE_SECRET_KEY=your-secret-key
 STORAGE_REGION=us-east-1
+APP_CORS_ALLOWED_ORIGIN_PATTERNS=http://localhost:5173
+```
+
+If you also want to run the frontend locally, copy [file-vault/.env.example](/Users/sonalisidana/Desktop/Projects/Cloud-Agnostic-File-Storage-Microservice/file-vault/.env.example:1) to `file-vault/.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
 ```
 
 Recommended local setup:
@@ -140,13 +159,23 @@ Expected response:
 }
 ```
 
-### 6. Seed a tenant for local testing
+### 6. Create a tenant for local testing
 
 Every protected endpoint expects an `X-API-Key` header that maps to a tenant record.
+
+You can either seed one directly in SQL:
 
 ```sql
 INSERT INTO tenants (name, api_key)
 VALUES ('demo-tenant', 'dev-api-key');
+```
+
+Or create one through the public demo endpoint after the app starts:
+
+```bash
+curl -X POST "http://localhost:8080/api/demo/tenants" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "demo-tenant" }'
 ```
 
 ### 7. Confirm Flyway created the tables
@@ -165,6 +194,16 @@ export API_URL=http://localhost:8080
 export API_KEY=dev-api-key
 ```
 
+### 9. Run the frontend locally (optional)
+
+```bash
+cd file-vault
+npm install
+npm run dev
+```
+
+The Vite dev server runs on `http://localhost:5173` by default, which matches the default backend CORS setting.
+
 ## Environment variables
 
 | Variable | Required | Description |
@@ -179,10 +218,12 @@ export API_KEY=dev-api-key
 | `STORAGE_ACCESS_KEY` | Yes | Storage access key |
 | `STORAGE_SECRET_KEY` | Yes | Storage secret key |
 | `STORAGE_REGION` | Optional for AWS | AWS region, defaults to `us-east-1` |
+| `APP_CORS_ALLOWED_ORIGIN_PATTERNS` | Optional | Comma-separated frontend origin patterns for CORS, defaults to `http://localhost:5173` |
+| `VITE_API_BASE_URL` | Frontend only | Deployed API base URL used by the Vite frontend |
 
 ## API endpoints
 
-All endpoints except health require:
+All endpoints except health and demo tenant creation require:
 
 ```http
 X-API-Key: <tenant-api-key>
@@ -194,9 +235,39 @@ X-API-Key: <tenant-api-key>
 curl "$API_URL/api/health"
 ```
 
+### Create demo tenant
+
+Creates a tenant and returns an API key that the frontend can save locally for demo access.
+
+```bash
+curl -X POST "$API_URL/api/demo/tenants" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "demo-tenant"
+  }'
+```
+
+The request body is optional. If `name` is omitted or blank, the service generates a default name such as `Demo Tenant <timestamp>`.
+
+Example response:
+
+```json
+{
+  "tenantId": "9fe7e6f8-7f85-4a59-8898-a8bbfca560e7",
+  "tenantName": "demo-tenant",
+  "apiKey": "demo_3f5d0f8c-29c8-4a3a-a4b1-51b4bf7f2a0f9b31d2d4",
+  "createdAt": "2026-05-25T12:30:00Z"
+}
+```
+
 ### Initiate upload
 
 Creates a pending file record and returns a presigned upload URL.
+
+Upload validation rules:
+
+- Files larger than `2 MB` are rejected
+- Only `pdf`, `txt`, `csv`, `json`, `png`, `jpg`, and `jpeg` files are accepted
 
 ```bash
 curl -X POST "$API_URL/api/files/initiate" \
@@ -229,6 +300,8 @@ curl -X PUT "<UPLOAD_URL>" \
   --data-binary @hello.txt
 ```
 
+The `Content-Type` header used here must match the validated type returned during upload initiation. The bundled frontend already does this.
+
 ### Complete upload
 
 Marks the file as uploaded after the client has finished uploading to object storage.
@@ -236,6 +309,17 @@ Marks the file as uploaded after the client has finished uploading to object sto
 ```bash
 curl -X POST "$API_URL/api/files/<FILE_ID>/complete" \
   -H "X-API-Key: $API_KEY" \
+  -i
+```
+
+### Upload through backend fallback
+
+Uploads the file through the backend instead of directly to object storage. This is mainly useful when browser-to-storage upload fails due to network or CORS constraints.
+
+```bash
+curl -X POST "$API_URL/api/files/<FILE_ID>/upload" \
+  -H "X-API-Key: $API_KEY" \
+  -F "file=@hello.txt;type=text/plain" \
   -i
 ```
 
@@ -293,6 +377,37 @@ Cloudflare R2 does not provide native bucket event notifications like AWS S3, so
 
 ## Deployment
 
+### Frontend and CORS
+
+For production, the backend must allow the frontend origin that the browser sends in the `Origin` header. The service reads that allowlist from `APP_CORS_ALLOWED_ORIGIN_PATTERNS`.
+
+Example backend env var:
+
+```env
+APP_CORS_ALLOWED_ORIGIN_PATTERNS=https://your-frontend.vercel.app,https://www.yourdomain.com,http://localhost:5173
+```
+
+Example using patterns for preview deployments:
+
+```env
+APP_CORS_ALLOWED_ORIGIN_PATTERNS=https://*.vercel.app,https://www.yourdomain.com,http://localhost:5173
+```
+
+Example frontend env var:
+
+```env
+VITE_API_BASE_URL=https://your-api-domain.com
+```
+
+If the browser shows a CORS error with a failed `OPTIONS` preflight or a `403` preflight response, the most common cause is that the deployed frontend origin is not included in `APP_CORS_ALLOWED_ORIGIN_PATTERNS`.
+
+Production checklist:
+
+- Backend deployed with the correct `APP_CORS_ALLOWED_ORIGIN_PATTERNS`
+- Frontend deployed with the correct `VITE_API_BASE_URL`
+- Frontend origin and API origin are both `https` in production
+- The browser `Origin` header exactly matches one of the configured origin patterns
+
 ### Run with Docker
 
 ```bash
@@ -318,6 +433,7 @@ Recommended setup:
 - In Supabase, copy the connection details from `Connect`.
 - In Render, create a Docker-based web service from this repository.
 - Add the same environment variables listed in `.env.example`.
+- Add `APP_CORS_ALLOWED_ORIGIN_PATTERNS` with your frontend domain.
 - Set `DATABASE_SCHEMA` explicitly if you do not want to use `public`.
 - Use `STORAGE_REGION` only when `STORAGE_PROVIDER=aws-s3`.
 - Keep the health check path set to `/api/health`.
