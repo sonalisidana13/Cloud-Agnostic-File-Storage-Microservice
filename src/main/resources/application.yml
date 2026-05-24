@@ -7,11 +7,19 @@ spring:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}
+    hikari:
+      schema: ${DATABASE_SCHEMA:public}
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: ${DATABASE_SCHEMA:public}
   flyway:
     enabled: true
+    default-schema: ${DATABASE_SCHEMA:public}
+    schemas: ${DATABASE_SCHEMA:public}
+    create-schemas: true
 storage:
   provider: ${STORAGE_PROVIDER:cloudflare-r2}
   bucket-name: ${STORAGE_BUCKET_NAME}

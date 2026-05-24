@@ -1,8 +1,8 @@
 package com.filestorage.provider;
 
+import com.filestorage.config.StorageProperties;
 import java.net.URI;
 import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -38,16 +38,11 @@ public class CloudflareR2Provider implements StorageProvider {
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
 
-    public CloudflareR2Provider(
-            @Value("${storage.bucket-name}") String bucketName,
-            @Value("${storage.account-id}") String accountId,
-            @Value("${storage.access-key}") String accessKey,
-            @Value("${storage.secret-key}") String secretKey
-    ) {
-        this.bucketName = bucketName;
-        this.accountId = accountId;
-        this.accessKey = accessKey;
-        this.secretKey = secretKey;
+    public CloudflareR2Provider(StorageProperties storageProperties) {
+        this.bucketName = storageProperties.bucketName();
+        this.accountId = storageProperties.accountId();
+        this.accessKey = storageProperties.accessKey();
+        this.secretKey = storageProperties.secretKey();
 
         AwsBasicCredentials credentials = AwsBasicCredentials.create(this.accessKey, this.secretKey);
         StaticCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(credentials);

@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: file-storage-service
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: cloudflare-r2
+      - key: STORAGE_BUCKET_NAME
+        sync: false
+      - key: STORAGE_ACCOUNT_ID
+        sync: false
+      - key: STORAGE_ACCESS_KEY
+        sync: false
+      - key: STORAGE_SECRET_KEY
+        sync: false
+      - key: STORAGE_REGION
+        value: us-east-1

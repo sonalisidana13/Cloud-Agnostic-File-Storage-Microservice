@@ -47,7 +47,8 @@ Zero code change required.
 - PostgreSQL
 - Flyway
 - AWS SDK for Java v2
-- Railway for backend deployment
+- Render for backend deployment
+- Supabase Postgres for the managed database
 - Vercel for a companion frontend or client app deployment
 
 ## Local setup
@@ -56,7 +57,7 @@ Zero code change required.
 
 - JDK 17 or newer
 - Maven 3.9+
-- PostgreSQL 14+
+- PostgreSQL 14+ or a Supabase Postgres project
 - A Cloudflare R2 bucket or AWS S3 bucket
 
 ### 1. Clone and enter the project
@@ -66,13 +67,20 @@ git clone <your-repo-url>
 cd Cloud-Agnostic-File-Storage-Microservice
 ```
 
-### 2. Create a PostgreSQL database
+### 2. Prepare your database
 
-Example:
+You have two easy options:
+
+- Local Postgres:
 
 ```sql
 CREATE DATABASE file_storage;
 ```
+
+- Supabase:
+  Create a new Supabase project, open the `Connect` panel, and copy either:
+  - the direct connection string if your environment supports IPv6, or
+  - the Supavisor session pooler string if you need IPv4 support.
 
 ### 3. Create your local env file
 
@@ -82,6 +90,7 @@ Copy `.env.example` to `.env` and fill in real values:
 DATABASE_URL=jdbc:postgresql://localhost:5432/file_storage
 DATABASE_USERNAME=postgres
 DATABASE_PASSWORD=postgres
+DATABASE_SCHEMA=public
 
 STORAGE_PROVIDER=cloudflare-r2
 STORAGE_BUCKET_NAME=your-bucket
@@ -91,6 +100,15 @@ STORAGE_SECRET_KEY=your-secret-key
 
 # Only needed for aws-s3
 STORAGE_REGION=us-east-1
+```
+
+If you are using Supabase, set `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` from the connection details in your Supabase dashboard. Supabase recommends direct connections for persistent backends when IPv6 is available, and the session pooler when IPv4 compatibility is needed.
+
+If you are using a schema inside an existing database, point `DATABASE_URL` at the database and set `DATABASE_SCHEMA` to that schema name. Example:
+
+```env
+DATABASE_URL=jdbc:postgresql://localhost:5432/postgres
+DATABASE_SCHEMA=file_storage
 ```
 
 ### 4. Load env vars into your shell
@@ -134,6 +152,7 @@ export API_KEY=dev-api-key
 | `DATABASE_URL` | Yes | PostgreSQL JDBC URL |
 | `DATABASE_USERNAME` | Yes | PostgreSQL username |
 | `DATABASE_PASSWORD` | Yes | PostgreSQL password |
+| `DATABASE_SCHEMA` | Optional | Database schema, defaults to `public` |
 | `STORAGE_PROVIDER` | Yes | `cloudflare-r2` or `aws-s3` |
 | `STORAGE_BUCKET_NAME` | Yes | Bucket name |
 | `STORAGE_ACCOUNT_ID` | R2 only | Cloudflare account ID |
@@ -267,12 +286,25 @@ docker build -t file-storage-service .
 docker run --env-file .env -p 8080:8080 file-storage-service
 ```
 
-### Railway
+### Render + Supabase
 
 This repo includes:
 
 - `Dockerfile`
-- `railway.toml`
+- `render.yaml`
 - `.env.example`
 
-Set the same environment variables in Railway, then deploy. Health checks use `GET /api/health`.
+Deploy the app to a Render web service using the repo `Dockerfile`, and point `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` at your Supabase Postgres instance. Health checks use `GET /api/health`.
+
+Recommended setup:
+
+- Create a Supabase Postgres project first.
+- In Supabase, copy the connection details from `Connect`.
+- In Render, create a Docker-based web service from this repository.
+- Add the same environment variables listed in `.env.example`.
+- Keep the health check path set to `/api/health`.
+
+Reference docs:
+
+- Render Blueprint and Docker deploy docs: https://render.com/docs/blueprint-spec and https://render.com/docs/docker
+- Supabase connection strings: https://supabase.com/docs/reference/postgres/connection-strings
