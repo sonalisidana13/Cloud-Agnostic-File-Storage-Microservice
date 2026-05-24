@@ -22,39 +22,40 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 @Component
-@ConditionalOnProperty(name = "storage.provider", havingValue = "do-spaces")
-public class DOSpacesStorageProvider implements StorageProvider {
+@ConditionalOnProperty(name = "storage.provider", havingValue = "cloudflare-r2")
+public class CloudflareR2Provider implements StorageProvider {
+
+    private static final Region R2_REGION = Region.of("auto");
 
     private final String bucketName;
-    private final String region;
+    private final String accountId;
     private final String accessKey;
     private final String secretKey;
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
 
-    public DOSpacesStorageProvider(
+    public CloudflareR2Provider(
             @Value("${storage.bucket-name}") String bucketName,
-            @Value("${storage.region}") String region,
+            @Value("${storage.account-id}") String accountId,
             @Value("${storage.access-key}") String accessKey,
             @Value("${storage.secret-key}") String secretKey
     ) {
         this.bucketName = bucketName;
-        this.region = region;
+        this.accountId = accountId;
         this.accessKey = accessKey;
         this.secretKey = secretKey;
 
         AwsBasicCredentials credentials = AwsBasicCredentials.create(this.accessKey, this.secretKey);
         StaticCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(credentials);
-        Region awsRegion = Region.of(this.region);
-        URI endpointOverride = URI.create("https://" + this.region + ".digitaloceanspaces.com");
+        URI endpointOverride = URI.create("https://" + this.accountId + ".r2.cloudflarestorage.com");
 
         this.s3Client = S3Client.builder()
-                .region(awsRegion)
+                .region(R2_REGION)
                 .credentialsProvider(credentialsProvider)
                 .endpointOverride(endpointOverride)
                 .build();
         this.s3Presigner = S3Presigner.builder()
-                .region(awsRegion)
+                .region(R2_REGION)
                 .credentialsProvider(credentialsProvider)
                 .endpointOverride(endpointOverride)
                 .build();
@@ -120,6 +121,6 @@ public class DOSpacesStorageProvider implements StorageProvider {
 
     @Override
     public String getProviderName() {
-        return "do-spaces";
+        return "cloudflare-r2";
     }
 }

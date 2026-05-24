@@ -13,8 +13,9 @@ spring:
   flyway:
     enabled: true
 storage:
-  provider: ${STORAGE_PROVIDER:do-spaces}
+  provider: ${STORAGE_PROVIDER:cloudflare-r2}
   bucket-name: ${STORAGE_BUCKET_NAME}
-  region: ${STORAGE_REGION:nyc3}
+  account-id: ${STORAGE_ACCOUNT_ID}
+  region: ${STORAGE_REGION:us-east-1}
   access-key: ${STORAGE_ACCESS_KEY}
   secret-key: ${STORAGE_SECRET_KEY}
