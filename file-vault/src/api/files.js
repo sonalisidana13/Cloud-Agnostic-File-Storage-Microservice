@@ -13,6 +13,16 @@ export const uploadToStorage = (uploadUrl, file, onProgress) =>
 export const completeUpload = (fileId) =>
   client.post(`/api/files/${fileId}/complete`)
 
+export const uploadPendingFile = (fileId, file, onProgress) => {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return client.post(`/api/files/${fileId}/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (e) => onProgress(Math.round((e.loaded * 100) / e.total)),
+  })
+}
+
 export const listFiles = () =>
   client.get('/api/files')
 

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import {
   completeUpload,
   initiateUpload,
+  uploadPendingFile,
   uploadToStorage,
 } from '../api/files'
 import { useToast } from '../context/ToastContext'
@@ -11,6 +12,46 @@ export default function UploadZone({ onUploadComplete }) {
   const { addToast } = useToast()
   const [isDragging, setIsDragging] = useState(false)
   const [uploads, setUploads] = useState([])
+
+  const isDirectUploadFailure = (err) =>
+    !err.response || err.code === 'ERR_NETWORK' || err.message === 'Network Error'
+
+  const shouldUseBackendUpload = (uploadUrl) => {
+    if (import.meta.env.VITE_FORCE_BACKEND_UPLOAD === 'true') {
+      return true
+    }
+
+    try {
+      const { hostname } = new URL(uploadUrl)
+      const isLocalFrontend =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1'
+
+      return (
+        isLocalFrontend &&
+        hostname.endsWith('.r2.cloudflarestorage.com')
+      )
+    } catch {
+      return false
+    }
+  }
+
+  const logDirectUploadFailure = (err, uploadUrl) => {
+    let uploadHost = 'unknown'
+
+    try {
+      uploadHost = new URL(uploadUrl).host
+    } catch {
+      uploadHost = 'invalid-url'
+    }
+
+    console.warn('Direct storage upload failed', {
+      uploadHost,
+      code: err.code,
+      message: err.message,
+      status: err.response?.status,
+    })
+  }
 
   const handleFiles = async (fileList) => {
     const files = Array.from(fileList)
@@ -36,21 +77,51 @@ export default function UploadZone({ onUploadComplete }) {
           file.size,
         )
         const { fileId, uploadUrl } = initiateRes.data
+        let usedBackendFallback = shouldUseBackendUpload(uploadUrl)
 
-        await uploadToStorage(uploadUrl, file, (pct) => {
-          setUploads((prev) =>
-            prev.map((u) => (u.id === uploadId ? { ...u, progress: pct } : u)),
-          )
-        })
+        if (!usedBackendFallback) {
+          try {
+            await uploadToStorage(uploadUrl, file, (pct) => {
+              setUploads((prev) =>
+                prev.map((u) =>
+                  u.id === uploadId ? { ...u, progress: pct } : u,
+                ),
+              )
+            })
 
-        await completeUpload(fileId)
+            await completeUpload(fileId)
+          } catch (err) {
+            logDirectUploadFailure(err, uploadUrl)
+
+            if (!isDirectUploadFailure(err)) {
+              throw err
+            }
+
+            usedBackendFallback = true
+          }
+        }
+
+        if (usedBackendFallback) {
+          await uploadPendingFile(fileId, file, (pct) => {
+            setUploads((prev) =>
+              prev.map((u) =>
+                u.id === uploadId ? { ...u, progress: pct } : u,
+              ),
+            )
+          })
+        }
 
         setUploads((prev) =>
           prev.map((u) =>
             u.id === uploadId ? { ...u, progress: 100, status: 'done' } : u,
           ),
         )
-        addToast(`${file.name} uploaded successfully`, 'success')
+        addToast(
+          usedBackendFallback
+            ? `${file.name} uploaded via backend fallback`
+            : `${file.name} uploaded successfully`,
+          'success',
+        )
       } catch (err) {
         setUploads((prev) =>
           prev.map((u) => (u.id === uploadId ? { ...u, status: 'error' } : u)),

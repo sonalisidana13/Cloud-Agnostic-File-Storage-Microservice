@@ -1,12 +1,14 @@
 package com.filestorage.provider;
 
 import com.filestorage.config.StorageProperties;
+import java.io.InputStream;
 import java.net.URI;
 import java.time.Duration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -92,6 +94,16 @@ public class CloudflareR2Provider implements StorageProvider {
 
         PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
         return presignedRequest.url().toString();
+    }
+
+    @Override
+    public void upload(String fileKey, String contentType, InputStream inputStream, long sizeBytes) {
+        PutObjectRequest request = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(fileKey)
+                .contentType(contentType)
+                .build();
+        s3Client.putObject(request, RequestBody.fromInputStream(inputStream, sizeBytes));
     }
 
     @Override

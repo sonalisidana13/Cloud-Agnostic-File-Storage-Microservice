@@ -3,6 +3,10 @@ server:
 spring:
   application:
     name: file-storage-service
+  servlet:
+    multipart:
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:100MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:100MB}
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}

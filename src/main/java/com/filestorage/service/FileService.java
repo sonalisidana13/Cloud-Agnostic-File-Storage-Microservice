@@ -9,6 +9,7 @@ import com.filestorage.model.StoredFile;
 import com.filestorage.model.Tenant;
 import com.filestorage.provider.StorageProvider;
 import com.filestorage.repository.StoredFileRepository;
+import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class FileService {
@@ -76,6 +78,42 @@ public class FileService {
                     "File not found in storage — upload may have failed",
                     storageProvider.getProviderName()
             );
+        }
+
+        storedFile.setStatus(UPLOADED_STATUS);
+        storedFile.setUploadedAt(LocalDateTime.now(ZoneOffset.UTC));
+        storedFileRepository.save(storedFile);
+        metricsService.updateMetrics(tenant.getId(), 1L, defaultToZero(storedFile.getSizeBytes()));
+    }
+
+    @Transactional
+    public void uploadPendingFile(Tenant tenant, UUID fileId, MultipartFile file) {
+        StoredFile storedFile = storedFileRepository.findByIdAndTenantId(fileId, tenant.getId())
+                .orElseThrow(() -> new FileNotFoundException("File not found"));
+
+        if (UPLOADED_STATUS.equals(storedFile.getStatus())) {
+            return;
+        }
+
+        String contentType = file.getContentType() == null || file.getContentType().isBlank()
+                ? storedFile.getContentType()
+                : file.getContentType();
+
+        storedFile.setOriginalName(file.getOriginalFilename());
+        storedFile.setContentType(contentType);
+        storedFile.setSizeBytes(file.getSize());
+
+        try {
+            storageProvider.upload(
+                    storedFile.getFileKey(),
+                    contentType,
+                    file.getInputStream(),
+                    file.getSize()
+            );
+        } catch (IOException exception) {
+            throw new StorageException("Failed to read upload stream", storageProvider.getProviderName());
+        } catch (RuntimeException exception) {
+            throw new StorageException("Upload to storage failed", storageProvider.getProviderName());
         }
 
         storedFile.setStatus(UPLOADED_STATUS);
