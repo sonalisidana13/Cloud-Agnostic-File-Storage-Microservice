@@ -293,12 +293,6 @@ Cloudflare R2 does not provide native bucket event notifications like AWS S3, so
 
 ## Deployment
 
-### Build the jar
-
-```bash
-mvn clean package
-```
-
 ### Run with Docker
 
 ```bash
@@ -315,6 +309,8 @@ This repo includes:
 - `.env.example`
 
 Deploy the app to a Render web service using the repo `Dockerfile`, and point `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` at your Supabase Postgres instance. Health checks use `GET /api/health`.
+
+The Docker image now builds the Spring Boot jar inside the container, so Render does not need a checked-in `target/` directory or a separate prebuild step.
 
 Recommended setup:
 
