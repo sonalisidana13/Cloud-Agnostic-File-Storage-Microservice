@@ -27,10 +27,16 @@ public class FileService {
     private static final String DELETED_STATUS = "DELETED";
 
     private final StoredFileRepository storedFileRepository;
+    private final MetricsService metricsService;
     private final StorageProvider storageProvider;
 
-    public FileService(StoredFileRepository storedFileRepository, StorageProvider storageProvider) {
+    public FileService(
+            StoredFileRepository storedFileRepository,
+            MetricsService metricsService,
+            StorageProvider storageProvider
+    ) {
         this.storedFileRepository = storedFileRepository;
+        this.metricsService = metricsService;
         this.storageProvider = storageProvider;
     }
 
@@ -61,6 +67,10 @@ public class FileService {
         StoredFile storedFile = storedFileRepository.findByIdAndTenantId(fileId, tenant.getId())
                 .orElseThrow(() -> new FileNotFoundException("File not found"));
 
+        if (UPLOADED_STATUS.equals(storedFile.getStatus())) {
+            return;
+        }
+
         if (!storageProvider.exists(storedFile.getFileKey())) {
             throw new StorageException(
                     "File not found in storage — upload may have failed",
@@ -71,6 +81,7 @@ public class FileService {
         storedFile.setStatus(UPLOADED_STATUS);
         storedFile.setUploadedAt(LocalDateTime.now(ZoneOffset.UTC));
         storedFileRepository.save(storedFile);
+        metricsService.updateMetrics(tenant.getId(), 1L, defaultToZero(storedFile.getSizeBytes()));
     }
 
     @Transactional(readOnly = true)
@@ -94,9 +105,22 @@ public class FileService {
         StoredFile storedFile = storedFileRepository.findByIdAndTenantId(fileId, tenant.getId())
                 .orElseThrow(() -> new FileNotFoundException("File not found"));
 
+        if (DELETED_STATUS.equals(storedFile.getStatus())) {
+            return;
+        }
+
+        boolean decrementMetrics = UPLOADED_STATUS.equals(storedFile.getStatus());
         storageProvider.delete(storedFile.getFileKey());
         storedFile.setStatus(DELETED_STATUS);
         storedFileRepository.save(storedFile);
+
+        if (decrementMetrics) {
+            metricsService.updateMetrics(tenant.getId(), -1L, -defaultToZero(storedFile.getSizeBytes()));
+        }
+    }
+
+    private long defaultToZero(Long value) {
+        return value == null ? 0L : value;
     }
 
     private FileMetadataResponse toFileMetadataResponse(StoredFile storedFile) {
