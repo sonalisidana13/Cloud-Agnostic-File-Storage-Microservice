@@ -29,6 +29,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private final RequestMatcher publicEndpoints = new OrRequestMatcher(
         new AntPathRequestMatcher("/api/health"),
         new AntPathRequestMatcher("/api/demo/tenants"),
+        new AntPathRequestMatcher("/api/demo/tenants/**"),
         new AntPathRequestMatcher("/actuator/health"),
         new AntPathRequestMatcher("/swagger-ui/**"),
         new AntPathRequestMatcher("/v3/api-docs/**")

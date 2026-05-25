@@ -4,25 +4,38 @@ import UploadZone from './components/UploadZone'
 import FileList from './components/FileList'
 import MetricsBar from './components/MetricsBar'
 import { deleteFile, getMetrics, listFiles } from './api/files'
+import {
+  createDemoTenant,
+  listDemoTenantMetrics,
+  listDemoTenants,
+} from './api/tenants'
+import TenantWorkspace from './components/TenantWorkspace'
 import { useToast } from './context/ToastContext'
 
 export default function App() {
   const { addToast } = useToast()
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('files')
   const [connected, setConnected] = useState(false)
   const [metrics, setMetrics] = useState(null)
   const [files, setFiles] = useState([])
+  const [demoTenants, setDemoTenants] = useState([])
+  const [tenantOverview, setTenantOverview] = useState([])
   const [loadingFiles, setLoadingFiles] = useState(false)
-
-  const handleConnect = (metricsData) => {
-    setMetrics(metricsData)
-    setConnected(true)
-    fetchFiles()
-  }
+  const [loadingTenants, setLoadingTenants] = useState(false)
+  const [loadingTenantOverview, setLoadingTenantOverview] = useState(false)
+  const [connectionLoading, setConnectionLoading] = useState(false)
+  const [creatingTenant, setCreatingTenant] = useState(false)
+  const [switchingTenantId, setSwitchingTenantId] = useState(null)
+  const [connectionError, setConnectionError] = useState('')
 
   const handleDisconnect = () => {
+    setActiveWorkspaceTab('files')
     setConnected(false)
     setMetrics(null)
     setFiles([])
+    setDemoTenants([])
+    setTenantOverview([])
+    setConnectionError('')
   }
 
   const fetchFiles = async () => {
@@ -38,16 +51,130 @@ export default function App() {
     }
   }
 
-  const refreshAll = async () => {
+  const loadDemoTenants = async () => {
+    setLoadingTenants(true)
+
     try {
-      const [filesRes, metricsRes] = await Promise.all([
+      const res = await listDemoTenants()
+      setDemoTenants(res.data)
+    } catch {
+      addToast('Failed to load tenants', 'error')
+    } finally {
+      setLoadingTenants(false)
+    }
+  }
+
+  const loadTenantOverview = async () => {
+    setLoadingTenantOverview(true)
+
+    try {
+      const res = await listDemoTenantMetrics()
+      setTenantOverview(res.data)
+    } catch {
+      addToast('Failed to load tenant metrics', 'error')
+    } finally {
+      setLoadingTenantOverview(false)
+    }
+  }
+
+  const connectWithApiKey = async (nextApiKey, options = {}) => {
+    const normalizedApiKey = nextApiKey.trim()
+
+    if (!normalizedApiKey) {
+      setConnectionError('Enter an API key')
+      return false
+    }
+
+    const previousApiKey = localStorage.getItem('apiKey')
+    setConnectionError('')
+    setConnectionLoading(true)
+
+    if (options.switchTenantId) {
+      setSwitchingTenantId(options.switchTenantId)
+    }
+
+    localStorage.setItem('apiKey', normalizedApiKey)
+
+    try {
+      const res = await getMetrics()
+      setActiveWorkspaceTab('files')
+      setMetrics(res.data)
+      setConnected(true)
+
+      await Promise.all([
+        fetchFiles(),
+        loadDemoTenants(),
+        loadTenantOverview(),
+      ])
+
+      if (options.successMessage) {
+        addToast(options.successMessage, 'success')
+      }
+
+      return true
+    } catch (err) {
+      if (previousApiKey) {
+        localStorage.setItem('apiKey', previousApiKey)
+      } else {
+        localStorage.removeItem('apiKey')
+      }
+
+      if (err.response?.status === 401) {
+        setConnectionError('Invalid API key')
+      } else {
+        setConnectionError('Cannot reach server')
+      }
+      return false
+    } finally {
+      setConnectionLoading(false)
+      setSwitchingTenantId(null)
+    }
+  }
+
+  const createAndConnectTenant = async (tenantName = '') => {
+    setCreatingTenant(true)
+    setConnectionError('')
+
+    try {
+      const normalizedTenantName = tenantName.trim()
+      const res = await createDemoTenant(normalizedTenantName || undefined)
+      const connected = await connectWithApiKey(res.data.apiKey, {
+        successMessage: `${res.data.tenantName} created`,
+      })
+      return connected
+    } catch (err) {
+      setConnectionError(err.response?.data?.error || 'Could not create demo tenant')
+      return false
+    } finally {
+      setCreatingTenant(false)
+    }
+  }
+
+  const handleSwitchTenant = async (tenant) => {
+    await connectWithApiKey(tenant.apiKey, {
+      switchTenantId: tenant.tenantId,
+      successMessage: `Switched to ${tenant.tenantName}`,
+    })
+  }
+
+  const refreshAll = async () => {
+    setLoadingFiles(true)
+    setLoadingTenantOverview(true)
+
+    try {
+      const [filesRes, metricsRes, overviewRes] = await Promise.all([
         listFiles(),
         getMetrics(),
+        listDemoTenantMetrics(),
       ])
       setFiles(filesRes.data)
       setMetrics(metricsRes.data)
+      setTenantOverview(overviewRes.data)
     } catch {
       addToast('Failed to refresh', 'error')
+    } finally {
+      setLoadingFiles(false)
+      setLoadingTenantOverview(false)
     }
   }
 
@@ -68,7 +195,12 @@ export default function App() {
         connected={connected}
         tenantName={metrics?.tenantName}
         provider={metrics?.provider}
-        onConnect={handleConnect}
+        loading={connectionLoading}
+        creatingTenant={creatingTenant}
+        error={connectionError}
+        onConnectWithApiKey={connectWithApiKey}
+        onCreateTenant={createAndConnectTenant}
+        onClearError={() => setConnectionError('')}
         onDisconnect={handleDisconnect}
       />
 
@@ -89,34 +221,91 @@ export default function App() {
 
           <MetricsBar metrics={metrics} />
 
-          <section className="mt-8 max-w-4xl">
-            <UploadZone onUploadComplete={refreshAll} />
-          </section>
+          <section className="mt-8 space-y-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <p className="eyebrow">Workspace navigation</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">
+                  {activeWorkspaceTab === 'files'
+                    ? `Working in ${metrics?.tenantName}`
+                    : 'Manage demo tenants'}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  {activeWorkspaceTab === 'files'
+                    ? 'Upload files, browse attachments, and manage content only for the currently connected tenant.'
+                    : 'Create named tenants, switch the active workspace, and compare tenant-level storage metrics.'}
+                </p>
+              </div>
 
-          <section className="panel-surface mt-6 overflow-hidden">
-            <div className="border-b border-white/8 px-5 py-4 sm:px-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="eyebrow">Library</p>
-                  <h2 className="mt-2 text-xl font-semibold text-white">
-                    Uploaded files
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Browse recent uploads and take quick actions without
-                    compressing the rest of the dashboard.
-                  </p>
-                </div>
-                <span className="inline-flex w-fit min-w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">
-                  {files.length}
-                </span>
+              <div className="inline-flex w-fit rounded-full border border-white/10 bg-white/5 p-1">
+                {[
+                  { id: 'files', label: 'Files' },
+                  { id: 'tenants', label: 'Tenants' },
+                ].map((tab) => {
+                  const isActive = activeWorkspaceTab === tab.id
+
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveWorkspaceTab(tab.id)}
+                      className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                        isActive
+                          ? 'bg-cyan-400 text-slate-950'
+                          : 'text-slate-300 hover:bg-white/8 hover:text-white'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
-            <FileList
-              files={files}
-              loading={loadingFiles}
-              onDelete={handleDelete}
-            />
+            {activeWorkspaceTab === 'files' ? (
+              <div className="space-y-6">
+                <section className="max-w-4xl">
+                  <UploadZone onUploadComplete={refreshAll} />
+                </section>
+
+                <section className="panel-surface overflow-hidden">
+                  <div className="border-b border-white/8 px-5 py-4 sm:px-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="eyebrow">Library</p>
+                        <h2 className="mt-2 text-xl font-semibold text-white">
+                          Uploaded files
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-400">
+                          Browse recent uploads and take quick actions without
+                          leaving the active tenant workspace.
+                        </p>
+                      </div>
+                      <span className="inline-flex w-fit min-w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">
+                        {files.length}
+                      </span>
+                    </div>
+                  </div>
+
+                  <FileList
+                    files={files}
+                    loading={loadingFiles}
+                    onDelete={handleDelete}
+                  />
+                </section>
+              </div>
+            ) : (
+              <TenantWorkspace
+                tenants={demoTenants}
+                tenantOverview={tenantOverview}
+                currentTenantId={metrics?.tenantId}
+                onCreateTenant={createAndConnectTenant}
+                onSwitchTenant={handleSwitchTenant}
+                creatingTenant={creatingTenant}
+                switchingTenantId={switchingTenantId}
+                loadingTenants={loadingTenants}
+                loadingOverview={loadingTenantOverview}
+              />
+            )}
           </section>
         </main>
       )}

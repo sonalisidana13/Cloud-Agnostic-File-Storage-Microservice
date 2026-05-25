@@ -15,3 +15,14 @@ export function timeAgo(isoString) {
   if (diff < 86400) return rtf.format(-Math.floor(diff / 3600), 'hour')
   return rtf.format(-Math.floor(diff / 86400), 'day')
 }
+
+export function formatDateTime(isoString) {
+  if (!isoString) return 'Unknown'
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(isoString))
+}

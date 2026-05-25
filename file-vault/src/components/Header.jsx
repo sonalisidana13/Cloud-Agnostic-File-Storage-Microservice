@@ -1,65 +1,29 @@
 import { useState } from 'react'
-import { getMetrics } from '../api/files'
-import { createDemoTenant } from '../api/tenants'
 
 export default function Header({
   connected,
   tenantName,
   provider,
-  onConnect,
+  loading,
+  creatingTenant,
+  error,
+  onConnectWithApiKey,
+  onCreateTenant,
+  onClearError,
   onDisconnect,
 }) {
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [creatingTenant, setCreatingTenant] = useState(false)
-  const [error, setError] = useState('')
-
-  const connectWithApiKey = async (nextApiKey) => {
-    const normalizedApiKey = nextApiKey.trim()
-
-    if (!normalizedApiKey) {
-      setError('Enter an API key')
-      return
-    }
-
-    setError('')
-    setLoading(true)
-    setApiKey(normalizedApiKey)
-    localStorage.setItem('apiKey', normalizedApiKey)
-
-    try {
-      const res = await getMetrics()
-      onConnect(res.data)
-    } catch (err) {
-      if (err.response?.status === 401) {
-        setError('Invalid API key')
-      } else {
-        setError('Cannot reach server')
-      }
-      localStorage.removeItem('apiKey')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [newTenantName, setNewTenantName] = useState('')
 
   const handleConnect = async () => {
-    await connectWithApiKey(apiKey)
+    await onConnectWithApiKey(apiKey)
   }
 
   const handleCreateTenant = async () => {
-    setCreatingTenant(true)
-    setError('')
-
-    try {
-      const res = await createDemoTenant()
-      const nextApiKey = res.data.apiKey
-      setShowKey(true)
-      await connectWithApiKey(nextApiKey)
-    } catch (err) {
-      setError(err.response?.data?.error || 'Could not create demo tenant')
-    } finally {
-      setCreatingTenant(false)
+    const created = await onCreateTenant(newTenantName)
+    if (created) {
+      setNewTenantName('')
     }
   }
 
@@ -114,12 +78,34 @@ export default function Header({
           </div>
         ) : (
           <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5 lg:w-auto">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="flex flex-col gap-3">
+              <input
+                type="text"
+                value={newTenantName}
+                onChange={(e) => {
+                  setNewTenantName(e.target.value)
+                  if (error) {
+                    onClearError()
+                  }
+                }}
+                placeholder="Optional tenant name for demo creation"
+                className="w-full min-w-0 rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/15"
+              />
+              <div className="rounded-2xl border border-white/8 bg-slate-950/35 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  Manual connect
+                </p>
+                <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center">
               <input
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter API key"
+                onChange={(e) => {
+                  setApiKey(e.target.value)
+                  if (error) {
+                    onClearError()
+                  }
+                }}
+                placeholder="Enter API key for manual connect"
                 className="w-full min-w-0 rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 xl:w-72"
               />
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:flex-nowrap">
@@ -145,10 +131,12 @@ export default function Header({
                 </button>
               </div>
             </div>
+              </div>
+            </div>
 
             <p className="mt-3 text-xs leading-5 text-slate-500">
-              Demo tenant creation generates and stores a local API key so you
-              can jump straight into the upload flow.
+              Create a named tenant first, or use manual API key connect if you
+              already have a tenant key.
             </p>
             {error ? (
               <p className="mt-2 rounded-2xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-sm text-red-300">

@@ -2,11 +2,13 @@ package com.filestorage.service;
 
 import com.filestorage.dto.CreateDemoTenantRequest;
 import com.filestorage.dto.CreateDemoTenantResponse;
+import com.filestorage.dto.DemoTenantSummaryResponse;
 import com.filestorage.model.Tenant;
 import com.filestorage.repository.TenantRepository;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +41,18 @@ public class TenantService {
                 tenant.getApiKey(),
                 createdAt.toInstant(ZoneOffset.UTC)
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<DemoTenantSummaryResponse> listDemoTenants() {
+        return tenantRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(tenant -> new DemoTenantSummaryResponse(
+                        tenant.getId(),
+                        tenant.getName(),
+                        tenant.getApiKey(),
+                        tenant.getCreatedAt() == null ? null : tenant.getCreatedAt().toInstant(ZoneOffset.UTC)
+                ))
+                .toList();
     }
 
     private String resolveTenantName(CreateDemoTenantRequest request) {
