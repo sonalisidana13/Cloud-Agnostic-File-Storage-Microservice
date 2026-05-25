@@ -3,39 +3,48 @@ export default function MetricsBar({ metrics }) {
     return null
   }
 
+  const cards = [
+    {
+      label: 'Total files',
+      value: metrics.totalFiles,
+      note: 'Files currently stored in this tenant',
+      accent: 'from-cyan-400/20 via-cyan-400/5 to-transparent',
+    },
+    {
+      label: 'Storage used',
+      value: metrics.totalBytesHuman,
+      note: 'Combined footprint across uploaded assets',
+      accent: 'from-fuchsia-400/18 via-fuchsia-400/5 to-transparent',
+    },
+    {
+      label: 'Provider',
+      value: metrics.provider,
+      note: 'Active backing storage for this workspace',
+      accent: 'from-emerald-400/18 via-emerald-400/5 to-transparent',
+    },
+  ]
+
   return (
-    <div className="flex flex-wrap gap-4">
-      <div className="min-w-32 flex-1 rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <p className="text-xs uppercase tracking-wide text-gray-500">
-          Total Files
-        </p>
-        <p className="mt-1 text-2xl font-medium text-white">
-          {metrics.totalFiles}
-        </p>
-      </div>
-
-      <div className="min-w-32 flex-1 rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <p className="text-xs uppercase tracking-wide text-gray-500">
-          Storage Used
-        </p>
-        <p className="mt-1 text-2xl font-medium text-white">
-          {metrics.totalBytesHuman}
-        </p>
-      </div>
-
-      <div className="min-w-32 flex-1 rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <p className="text-xs uppercase tracking-wide text-gray-500">
-          Provider
-        </p>
-        <p className="mt-1 text-lg font-medium text-white">
-          {metrics.provider}
-        </p>
-        {metrics.provider === 'cloudflare-r2' ? (
-          <span className="mt-1 inline-block rounded-full border border-green-800 bg-green-950 px-2 py-0.5 text-xs text-green-400">
-            Free egress
-          </span>
-        ) : null}
-      </div>
+    <div className="grid gap-4 md:grid-cols-3">
+      {cards.map((card) => (
+        <div
+          key={card.label}
+          className="panel-surface group relative overflow-hidden p-5 sm:p-6"
+        >
+          <div
+            className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-b ${card.accent} opacity-80 transition duration-300 group-hover:opacity-100`}
+          />
+          <div className="relative">
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
+              {card.label}
+            </p>
+            <p className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+              {card.value}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{card.note}</p>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

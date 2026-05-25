@@ -20,6 +20,7 @@ const SUPPORTED_MIME_TYPES_BY_EXTENSION = {
   jpeg: ['image/jpeg'],
 }
 const ACCEPTED_FILE_TYPES = '.pdf,.txt,.csv,.json,.png,.jpg,.jpeg'
+const FILE_TYPE_BADGES = ['PDF', 'TXT', 'CSV', 'JSON', 'PNG', 'JPG']
 
 export default function UploadZone({ onUploadComplete }) {
   const inputRef = useRef(null)
@@ -197,70 +198,154 @@ export default function UploadZone({ onUploadComplete }) {
   }
 
   return (
-    <div>
-      <div
-        onClick={() => inputRef.current.click()}
-        onDragOver={(e) => {
-          e.preventDefault()
-          setIsDragging(true)
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault()
-          setIsDragging(false)
-          handleFiles(e.dataTransfer.files)
-        }}
-        className={`cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-colors duration-150 ${
-          isDragging
-            ? 'border-blue-500 bg-blue-950/20'
-            : 'border-gray-700 bg-gray-900 hover:border-gray-500'
-        }`}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPTED_FILE_TYPES}
-          multiple
-          onChange={handleInputChange}
-          className="hidden"
-        />
-        <div className="mb-3 text-3xl text-gray-500">
-          {isDragging ? '↑' : '📁'}
+    <section className="panel-surface overflow-hidden">
+      <div className="border-b border-white/8 px-5 py-4 sm:px-6">
+        <p className="eyebrow">Upload</p>
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-white">
+              Upload files to the vault
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Add supported files with automatic progress tracking and seamless
+              fallback when needed.
+            </p>
+          </div>
+          <span className="inline-flex w-fit items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.18em] whitespace-nowrap text-slate-300">
+            Max 2 MB each
+          </span>
         </div>
-        <p className="text-gray-400">Drop files here or click to browse</p>
-        <p className="mt-1 text-sm text-gray-600">
-          {SUPPORTED_FILE_TYPES_MESSAGE}, max 2 MB per file
-        </p>
       </div>
 
-      {uploads.length > 0 ? (
-        <div className="mt-4 space-y-3">
-          {uploads.map((upload) => (
-            <div key={upload.id}>
-              <div className="flex items-center justify-between gap-4">
-                <p className="max-w-xs truncate text-sm text-gray-300">
-                  {upload.fileName}
-                </p>
-                <span className="text-xs">
-                  {upload.status === 'uploading' ? (
-                    <span className="text-gray-500">{upload.progress}%</span>
-                  ) : upload.status === 'done' ? (
-                    <span className="text-green-400">✓</span>
-                  ) : (
-                    <span className="text-red-400">✗ failed</span>
-                  )}
-                </span>
+      <div className="p-5 sm:p-6">
+        <div
+          onClick={() => inputRef.current.click()}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setIsDragging(true)
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setIsDragging(false)
+            handleFiles(e.dataTransfer.files)
+          }}
+          className={`group cursor-pointer rounded-[28px] border p-6 transition duration-200 sm:p-8 ${
+            isDragging
+              ? 'border-cyan-400/60 bg-cyan-400/10 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_24px_60px_rgba(8,47,73,0.35)]'
+              : 'border-white/10 bg-slate-950/70 hover:border-cyan-300/30 hover:bg-slate-950/90'
+          }`}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPTED_FILE_TYPES}
+            multiple
+            onChange={handleInputChange}
+            className="hidden"
+          />
+
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="max-w-2xl">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-2xl text-cyan-200">
+                {isDragging ? '↑' : '↥'}
               </div>
-              <div className="mt-1 h-1.5 w-full rounded-full bg-gray-800">
-                <div
-                  className="h-full rounded-full bg-blue-500 transition-all"
-                  style={{ width: `${upload.progress}%` }}
-                />
-              </div>
+              <h3 className="mt-5 max-w-xl text-2xl font-semibold tracking-tight text-white">
+                {isDragging
+                  ? 'Release to start uploading'
+                  : 'Drag files here or choose them from your device'}
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                {SUPPORTED_FILE_TYPES_MESSAGE}. You can upload multiple files at
+                once, and the app will handle fallback automatically if direct
+                storage upload is unavailable.
+              </p>
             </div>
-          ))}
+
+            <div className="flex flex-col items-start gap-3 xl:items-end">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-2xl bg-white px-6 py-3 text-sm font-medium whitespace-nowrap text-slate-950 transition group-hover:bg-cyan-300"
+              >
+                Choose files
+              </button>
+              <p className="text-sm text-slate-500 xl:text-right">
+                Or drag and drop files anywhere in this panel
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            {FILE_TYPE_BADGES.map((badge) => (
+              <span
+                key={badge}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-300"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
         </div>
-      ) : null}
-    </div>
+
+        {uploads.length > 0 ? (
+          <div className="mt-5 rounded-[26px] border border-white/8 bg-slate-950/75 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-white">Upload queue</p>
+                <p className="mt-1 text-sm text-slate-400">
+                  Progress updates stay here until the queue completes.
+                </p>
+              </div>
+              <span className="inline-flex h-9 min-w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 text-sm text-slate-200">
+                {uploads.length}
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {uploads.map((upload) => (
+                <div
+                  key={upload.id}
+                  className="rounded-2xl border border-white/8 bg-white/[0.03] p-4"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-100">
+                        {upload.fileName}
+                      </p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
+                        {upload.status === 'uploading'
+                          ? 'Uploading'
+                          : upload.status === 'done'
+                            ? 'Completed'
+                            : 'Failed'}
+                      </p>
+                    </div>
+                    <span className="text-sm">
+                      {upload.status === 'uploading' ? (
+                        <span className="text-slate-300">{upload.progress}%</span>
+                      ) : upload.status === 'done' ? (
+                        <span className="text-emerald-300">Done</span>
+                      ) : (
+                        <span className="text-red-300">Retry needed</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="mt-3 h-2 w-full rounded-full bg-white/8">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        upload.status === 'error'
+                          ? 'bg-red-400'
+                          : 'bg-gradient-to-r from-cyan-400 to-blue-500'
+                      }`}
+                      style={{ width: `${upload.progress}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </section>
   )
 }
