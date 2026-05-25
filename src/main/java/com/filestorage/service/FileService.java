@@ -48,15 +48,18 @@ public class FileService {
     private final StoredFileRepository storedFileRepository;
     private final MetricsService metricsService;
     private final StorageProvider storageProvider;
+    private final StorageObjectKeyBuilder storageObjectKeyBuilder;
 
     public FileService(
             StoredFileRepository storedFileRepository,
             MetricsService metricsService,
-            StorageProvider storageProvider
+            StorageProvider storageProvider,
+            StorageObjectKeyBuilder storageObjectKeyBuilder
     ) {
         this.storedFileRepository = storedFileRepository;
         this.metricsService = metricsService;
         this.storageProvider = storageProvider;
+        this.storageObjectKeyBuilder = storageObjectKeyBuilder;
     }
 
     @Transactional
@@ -65,7 +68,11 @@ public class FileService {
         String normalizedContentType = validateFileType(request.fileName(), request.contentType());
 
         UUID fileId = UUID.randomUUID();
-        String fileKey = tenant.getId() + "/" + fileId + "/" + request.fileName();
+        String fileKey = storageObjectKeyBuilder.buildTenantFileKey(
+                tenant.getId(),
+                fileId,
+                request.fileName()
+        );
 
         StoredFile storedFile = new StoredFile();
         storedFile.setId(fileId);
