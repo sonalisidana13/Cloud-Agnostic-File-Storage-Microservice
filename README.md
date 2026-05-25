@@ -1,6 +1,6 @@
 # Cloud-Agnostic File Storage Microservice
 
-A Spring Boot microservice for direct-to-object-storage uploads, tenant-scoped file metadata, storage-provider switching with zero code changes, and a lightweight demo tenant flow for frontend testing.
+A Spring Boot microservice for direct-to-object-storage uploads, tenant-scoped file metadata, storage-provider switching with zero code changes, and a lightweight demo multi-tenant flow for frontend testing.
 
 ## Why cloud-agnostic?
 
@@ -30,9 +30,17 @@ Local configuration is loaded automatically from `.env` at application startup, 
 Current tenant and upload behavior:
 
 - Every protected API request uses `X-API-Key`
-- A public demo endpoint can create a tenant and return an API key for frontend demos
+- Public demo endpoints can create tenants, list tenants, and return tenant-wise overview metrics for local/demo use
 - The React frontend stores the API key locally and sends it on API requests
+- The React frontend supports one-click tenant switching in demo mode
 - Uploads prefer direct browser-to-storage transfer and fall back to backend multipart upload if needed
+
+Current object key behavior:
+
+- New uploads use a tenant-first object key pattern:
+  `tenants/{tenantId}/files/{fileId}/{sanitizedOriginalFilename}`
+- The original filename is sanitized before storing it in the object key
+- Download, existence checks, and delete continue to work from the stored `fileKey`
 
 Current upload guardrails:
 
@@ -178,6 +186,13 @@ curl -X POST "http://localhost:8080/api/demo/tenants" \
   -d '{ "name": "demo-tenant" }'
 ```
 
+For demo multi-tenant flows, you can also list all tenants and tenant-wise metrics without an API key:
+
+```bash
+curl "http://localhost:8080/api/demo/tenants"
+curl "http://localhost:8080/api/demo/tenants/metrics"
+```
+
 ### 7. Confirm Flyway created the tables
 
 In your selected schema, you should now see:
@@ -204,6 +219,15 @@ npm run dev
 
 The Vite dev server runs on `http://localhost:5173` by default, which matches the default backend CORS setting.
 
+Current demo UI behavior:
+
+- Disconnected state:
+  - manual API key connect
+  - create a named demo tenant
+- Connected state:
+  - `Files` tab for upload and file management
+  - `Tenants` tab for tenant creation, tenant switching, and tenant-wise metrics overview
+
 ## Environment variables
 
 | Variable | Required | Description |
@@ -223,7 +247,7 @@ The Vite dev server runs on `http://localhost:5173` by default, which matches th
 
 ## API endpoints
 
-All endpoints except health and demo tenant creation require:
+All endpoints except health and demo tenant endpoints require:
 
 ```http
 X-API-Key: <tenant-api-key>
@@ -260,6 +284,51 @@ Example response:
 }
 ```
 
+### List demo tenants
+
+Returns all demo-manageable tenants, including API keys, for the local/demo tenant switcher UI.
+
+```bash
+curl "$API_URL/api/demo/tenants"
+```
+
+Example response:
+
+```json
+[
+  {
+    "tenantId": "9fe7e6f8-7f85-4a59-8898-a8bbfca560e7",
+    "tenantName": "demo-tenant",
+    "apiKey": "demo_3f5d0f8c-29c8-4a3a-a4b1-51b4bf7f2a0f9b31d2d4",
+    "createdAt": "2026-05-25T12:30:00Z"
+  }
+]
+```
+
+### List demo tenant metrics
+
+Returns tenant-wise overview metrics for the local/demo multi-tenant dashboard.
+
+```bash
+curl "$API_URL/api/demo/tenants/metrics"
+```
+
+Example response:
+
+```json
+[
+  {
+    "tenantId": "9fe7e6f8-7f85-4a59-8898-a8bbfca560e7",
+    "tenantName": "demo-tenant",
+    "createdAt": "2026-05-25T12:30:00Z",
+    "totalFiles": 1,
+    "totalBytes": 1048576,
+    "totalBytesHuman": "1.0 MB",
+    "provider": "cloudflare-r2"
+  }
+]
+```
+
 ### Initiate upload
 
 Creates a pending file record and returns a presigned upload URL.
@@ -288,6 +357,12 @@ Example response:
   "uploadUrl": "https://...",
   "expiresAt": "2026-05-24T07:30:00Z"
 }
+```
+
+New uploads are stored under a tenant-first object key such as:
+
+```text
+tenants/<TENANT_ID>/files/<FILE_ID>/hello.txt
 ```
 
 ### Upload the file directly to object storage
@@ -374,6 +449,21 @@ Example response:
 ## Reconciliation poller
 
 Cloudflare R2 does not provide native bucket event notifications like AWS S3, so the service includes a scheduled reconciliation poller. Every 60 seconds, it checks stale `PENDING` uploads older than 2 minutes, marks real objects as `UPLOADED`, marks missing ones as `FAILED`, and updates tenant metrics when it recovers a successful upload.
+
+## Frontend workflow
+
+The bundled `file-vault` app is now organized around two connected-state tabs:
+
+- `Files`
+  - active-tenant metrics
+  - upload area
+  - uploaded file library
+- `Tenants`
+  - create named demo tenants
+  - switch between tenants
+  - compare tenant-wise metrics
+
+This keeps tenant administration separate from day-to-day file work while still staying in a single-page app.
 
 ## Deployment
 
